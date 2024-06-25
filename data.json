@@ -1,0 +1,193 @@
+[
+    {
+        "name": null,
+        "salary": null,
+        "tags": [
+            "Москва"
+        ]
+    },
+    {
+        "name": null,
+        "salary": null,
+        "tags": [
+            "Москва"
+        ]
+    },
+    {
+        "name": null,
+        "salary": null,
+        "tags": null
+    },
+    {
+        "name": null,
+        "salary": null,
+        "tags": null
+    },
+    {
+        "name": "Python-разработчик",
+        "salary": null,
+        "tags": [
+            "Python",
+            "ООП",
+            "Git",
+            "PostgreSQL",
+            "SQL",
+            "Django Framework",
+            "Django",
+            "HTML",
+            "CSS",
+            "Bootstrap",
+            "Stripe",
+            "Docker",
+            "Jupiter",
+            "SQLite",
+            "Умение работать в команде",
+            "Паттерны проектирования",
+            "Английский язык",
+            "Умение разбираться в чужом коде",
+            "Linux",
+            "Базы данных"
+        ]
+    },
+    {
+        "name": "Python Backend Developer",
+        "salary": null,
+        "tags": [
+            "Python",
+            "Linux",
+            "PostgreSQL",
+            "Docker",
+            "Git",
+            "Django",
+            "Django Framework",
+            "Redis",
+            "FastAPI",
+            "sqlalchemy"
+        ]
+    },
+    {
+        "name": "Python разработчик",
+        "salary": null,
+        "tags": [
+            "Python",
+            "Django REST Framework",
+            "Django Framework",
+            "PostgreSQL",
+            "MySQL",
+            "SQLite",
+            "Unit Testing",
+            "Git",
+            "GitHub",
+            "API",
+            "Telegram API",
+            "Linux",
+            "Ubuntu Server",
+            "Nginx",
+            "Docker",
+            "Gunicorn",
+            "Postfix",
+            "Postman",
+            "PyCharm",
+            "Visual Studio Code",
+            "Navicat"
+        ]
+    },
+    {
+        "name": "Python developer",
+        "salary": null,
+        "tags": [
+            "Python",
+            "SQL",
+            "Django Framework",
+            "English",
+            "PostgreSQL",
+            "FastAPI",
+            "Git",
+            "Linux",
+            "Redis",
+            "Docker",
+            "HTML",
+            "CSS",
+            "Docker-compose",
+            "Flask",
+            "Backend",
+            "REST API",
+            "Django Rest Framework",
+            "Web Application Development",
+            "Googling",
+            "Умение разбираться в чужом коде",
+            "GitHub"
+        ]
+    },
+    {
+        "name": "Python Developer",
+        "salary": null,
+        "tags": [
+            "Работоспособность",
+            "Целеустремленность",
+            "Ответственность",
+            "Работа в команде",
+            "Обучаемость",
+            "Python",
+            "Linux",
+            "Грамотная речь",
+            "SQL",
+            "Pandas",
+            "Selenium",
+            "RobotFramework"
+        ]
+    },
+    {
+        "name": "Python Разработчик ",
+        "salary": null,
+        "tags": [
+            "Python",
+            "Django Framework",
+            "PostgreSQL",
+            "Linux",
+            "Django Rest Framework",
+            "Git",
+            "Django"
+        ]
+    },
+    {
+        "name": "Python developer",
+        "salary": "260000₽ наруки",
+        "tags": [
+            "Ответственность",
+            "Исполнительность",
+            "JavaScript",
+            "Node.js",
+            "Python",
+            "react.js",
+            "Git",
+            "CSS",
+            "Django Framework",
+            "SQL",
+            "vue.js",
+            "Flask",
+            "PostgreSQL"
+        ]
+    },
+    {
+        "name": "Python Developer",
+        "salary": null,
+        "tags": [
+            "Работоспособность",
+            "Python",
+            "Selenium IDE",
+            "Linux",
+            "MySQL",
+            "Git",
+            "SQL",
+            "C#",
+            "C++",
+            "PHP",
+            "ООП",
+            "FastAPI",
+            "Django Framework",
+            "sqlalchemy",
+            "Docker"
+        ]
+    }
+]
