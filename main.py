@@ -2,22 +2,55 @@ import requests
 from bs4 import BeautifulSoup
 import fake_useragent
 import time
-import json
+import sqlite3
+from urllib.parse import urlencode
 
-def get_links(text):
+def get_links(text, salary_from=None, salary_to=None, **filters):
     ua = fake_useragent.UserAgent()
-    link = f"https://hh.ru/search/resume?text={text}&area=1&isDefaultArea=true&exp_period=all_time&logic=normal&pos=full_text&page=1/"
-    data = requests.get(url=link, headers={"user-agent":ua.random})
+
+    # Базовые параметры запроса
+    base_params = {
+        'text': text,
+        'area': 1,
+        'isDefaultArea': 'true',
+        'exp_period': 'all_time',
+        'logic': 'normal',
+        'pos': 'full_text',
+        'page': 1,
+        'order_by': 'relevance',
+        'items_on_page': 50
+    }
+
+    # Объединение базовых параметров с дополнительными фильтрами
+    params = {**base_params, **filters}
+
+    # Добавление параметров зарплаты, если они указаны
+    if salary_from is not None:
+        params['salary_from'] = salary_from
+    if salary_to is not None:
+        params['salary_to'] = salary_to
+    if salary_from is not None or salary_to is not None:
+        params['label'] = 'only_with_salary'
+
+    # Построение URL с параметрами
+    link = f"https://hh.ru/search/resume?{urlencode(params)}"
+    data = requests.get(url=link, headers={"user-agent": ua.random})
+
     if data.status_code != 200:
         return
+
     soup = BeautifulSoup(data.content, 'lxml')
+
     try:
-        page_count = int(soup.find('div', class_='pager').find_all('span', recursive=False)[-1].find('a').find('span').text)
+        page_count = int(
+            soup.find('div', class_='pager').find_all('span', recursive=False)[-1].find('a').find('span').text)
     except:
-        return
+        page_count = 1  # Если количество страниц не найдено, предполагаем одну страницу
+
     for page in range(page_count):
         try:
-            link = f"https://hh.ru/search/resume?text={text}&area=1&isDefaultArea=true&exp_period=all_time&logic=normal&pos=full_text&page={page}/"
+            params['page'] = page
+            link = f"https://hh.ru/search/resume?{urlencode(params)}"
             data = requests.get(url=link, headers={"user-agent": ua.random})
             if data.status_code != 200:
                 continue
@@ -26,34 +59,31 @@ def get_links(text):
                 href = a.get('href').split('?')[0]
                 full_url = f"https://hh.ru{href}"
                 yield full_url
-                #yield f"https://hh.ru{a.get('href')}"
         except Exception as e:
-            print(f"{e}")
+            print(f"Error during link fetching: {e}")
             time.sleep(1)
-
-# ua = fake_useragent.UserAgent()
-# data = requests.get(url='https://hh.ru/resume/2756fa070003af688e0039ed1f4f4777794744?query=python&searchRid=1719332583299e3d13d5b0eef868cf04&hhtmFrom=resume_search_result', headers={"user-agent": ua.random})
-# soup = BeautifulSoup(data.content, 'lxml')
-# tags = soup.find('div', class_='bloko-tag-list').find_all('span', class_='bloko-tag__section bloko-tag__section_text')
-# tag_texts = [tag.text for tag in tags]
-# print(tag_texts)
-
 
 def get_resume(link):
     ua = fake_useragent.UserAgent()
     data = requests.get(url=link, headers={"user-agent": ua.random})
     if data.status_code != 200:
+        print(f"Failed to fetch resume from {link}")
         return
     soup = BeautifulSoup(data.content, 'lxml')
+
     # Название резюме
     try:
         name = soup.find('span', class_="resume-block__title-text").text
-    except:
-        name = None
+        if not name.strip():  # Проверяем, что name не пустое
+            print(f"Empty name found for resume at {link}. Skipping.")
+            return
+    except Exception as e:
+        print(f"Error while fetching name for {link}: {e}")
+        return
 
     # Зарплата
     try:
-        salary = soup.find('span', class_='resume-block__salary').text.replace('\u2009', '').replace('\xa0', '')
+        salary = soup.find('span', class_='resume-block__salary').text.replace('\u2009', ' ').replace('\xa0', ' ')
     except:
         salary = None
 
@@ -61,22 +91,52 @@ def get_resume(link):
     try:
         tages = soup.find('div', class_='bloko-tag-list').find_all('span', class_='bloko-tag__section bloko-tag__section_text')
         tag_texts = [tag.text for tag in tages]
-        tags = tag_texts
+        tags = ', '.join(tag_texts)  # Преобразуем список тегов в строку
     except:
         tags = None
 
-    resume = {
-        "name":name,
-        "salary":salary,
-        "tags":tags
-    }
-    return resume
+    # Занятость
+    try:
+        employment = str(soup.find('div', class_='resume-block-container').find_all('p')[0].text)
+    except:
+        employment = None
 
+    # График работы
+    try:
+        schedule = str(soup.find('div', class_='resume-block-container').find_all('p')[1].text)
+    except:
+        schedule = None
+
+    resume = {
+        "name": name,
+        "salary": salary,
+        "tags": tags,
+        "employment": employment,
+        "schedule": schedule
+    }
+
+    # Вставка данных в базу данных
+    try:
+        conn = sqlite3.connect('resumes.db')
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO resumes (name, salary, tags, employment, schedule)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (resume['name'], resume['salary'], resume['tags'], resume['employment'], resume['schedule']))
+        conn.commit()
+        conn.close()
+        print(f"Added resume to database: {resume}")
+    except Exception as e:
+        print(f"Error during database insertion: {e}")
 
 if __name__ == "__main__":
-    data = []
-    for a in get_links("python"):
-        data.append(get_resume((a)))
+    filters = {
+        'hhtmFrom': 'resume_search_form',
+        'relocation': 'living_or_relocation',
+        'gender': 'unknown',
+        'search_period': 0,
+        'filter_exp_period': 'all_time'
+    }
+    for link in get_links('python', salary_from=None, salary_to=None, **filters):
+        get_resume(link)
         time.sleep(1)
-        with open("data.json", "w", encoding="utf-8") as f:
-            json.dump(data,f,indent=4, ensure_ascii=False)
