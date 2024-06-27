@@ -5,11 +5,36 @@ import time
 import sqlite3
 from urllib.parse import urlencode
 
-def get_links(text):
+def get_links(text, salary_from=None, salary_to=None, experience=None, schedule=None):
     ua = fake_useragent.UserAgent()
 
+    # Базовые параметры запроса
+    base_params = {
+        'text': text,
+        'area': 1,
+        'page': 1,
+        'search_field': ['name', 'company_name', 'description'],
+        'enable_snippets': 'false',
+        'only_with_salary': 'true' if salary_from or salary_to else 'false'
+    }
+
+    # Добавление параметров зарплаты, если они указаны
+    if salary_from:
+        base_params['salary_from'] = salary_from
+
+    if salary_to:
+        base_params['salary_to'] = salary_to
+
+    # Добавление параметра опыта работы, если он указан
+    if experience:
+        base_params['experience'] = experience
+
+    # Добавление параметра графика работы, если он указан
+    if schedule:
+        base_params['schedule'] = schedule
+
     # Построение URL с параметрами
-    link = f"https://hh.ru/search/vacancy?text={text}&area=1&page=1"
+    link = f"https://hh.ru/search/vacancy?{urlencode(base_params, doseq=True)}"
     data = requests.get(url=link, headers={"user-agent": ua.random})
 
     if data.status_code != 200:
@@ -25,7 +50,8 @@ def get_links(text):
 
     for page in range(page_count):
         try:
-            link = f"https://hh.ru/search/vacancy?text={text}&area=1&page={page}"
+            base_params['page'] = page
+            link = f"https://hh.ru/search/vacancy?{urlencode(base_params, doseq=True)}"
             data = requests.get(url=link, headers={"user-agent": ua.random})
             if data.status_code != 200:
                 continue
@@ -38,17 +64,6 @@ def get_links(text):
         except Exception as e:
             print(f"Error during link fetching: {e}")
             time.sleep(1)
-
-
-# ua = fake_useragent.UserAgent()
-# data = requests.get(url='https://hh.ru/vacancy/102551587', headers={"user-agent": ua.random})
-# soup = BeautifulSoup(data.content, 'lxml')
-# name = soup.find('div', class_='vacancy-title').find('h1', class_='bloko-header-section-1').text
-# exp = soup.find_all('p', class_='vacancy-description-list-item')[0].text
-# employment = soup.find_all('p', class_='vacancy-description-list-item')[1].text
-# salary = soup.find('div', class_='vacancy-title').find('span').text.replace('\u2009', ' ').replace('\xa0', ' ')
-# view = soup.find('div', class_='noprint').text.replace('\u2009', ' ').replace('\xa0', ' ').replace('Откликнуться', '')
-# print(name, exp, employment, salary)
 
 def get_vacancy(link):
     ua = fake_useragent.UserAgent()
@@ -100,7 +115,6 @@ def get_vacancy(link):
         "view": view
     }
 
-
     # Вставка данных в базу данных
     try:
         conn = sqlite3.connect('main.db')
@@ -115,8 +129,18 @@ def get_vacancy(link):
     except Exception as e:
         print(f"Error during database insertion: {e}")
 
-
 if __name__ == "__main__":
-    for link in get_links('python'):
+    salary_from = input("Enter minimum salary (or leave blank): ")
+    salary_to = input("Enter maximum salary (or leave blank): ")
+    experience = input("Enter experience (noExperience, between1And3, between3And6, moreThan6) (or leave blank): ")
+    schedule = input("Enter schedule (fullDay, remote, flexible) (or leave blank): ")
+
+    # Преобразование пустых строк в None
+    salary_from = int(salary_from) if salary_from else None
+    salary_to = int(salary_to) if salary_to else None
+    experience = experience if experience else None
+    schedule = schedule if schedule else None
+
+    for link in get_links('python', salary_from=salary_from, salary_to=salary_to, experience=experience, schedule=schedule):
         get_vacancy(link)
         time.sleep(1)

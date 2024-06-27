@@ -5,7 +5,7 @@ import time
 import sqlite3
 from urllib.parse import urlencode
 
-def get_links(text, salary_from=None, salary_to=None, **filters):
+def get_links(text, employment='full', schedule=None, salary_from=None, salary_to=None, **filters):
     ua = fake_useragent.UserAgent()
 
     # Базовые параметры запроса
@@ -18,11 +18,16 @@ def get_links(text, salary_from=None, salary_to=None, **filters):
         'pos': 'full_text',
         'page': 1,
         'order_by': 'relevance',
+        'employment': employment,  # добавлен параметр employment
         'items_on_page': 50
     }
 
     # Объединение базовых параметров с дополнительными фильтрами
     params = {**base_params, **filters}
+
+    # Добавление параметров графика работы, если они указаны
+    if schedule:
+        params['schedule'] = schedule
 
     # Добавление параметров зарплаты, если они указаны
     if salary_from is not None:
@@ -137,6 +142,15 @@ if __name__ == "__main__":
         'search_period': 0,
         'filter_exp_period': 'all_time'
     }
-    for link in get_links('python', salary_from=None, salary_to=None, **filters):
+    employment_type = input("Enter employment type (full, part, probation): ")
+    schedule_type = input("Enter schedule type (fullDay, remote, flexible, or leave blank): ")
+    salary_from = input("Enter minimum salary (or leave blank): ")
+    salary_to = input("Enter maximum salary (or leave blank): ")
+
+    # Преобразование пустых строк в None
+    salary_from = int(salary_from) if salary_from else None
+    salary_to = int(salary_to) if salary_to else None
+
+    for link in get_links('python', employment=employment_type, schedule=schedule_type, salary_from=salary_from, salary_to=salary_to, **filters):
         get_resume(link)
         time.sleep(1)
