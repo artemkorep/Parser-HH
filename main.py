@@ -117,7 +117,7 @@ def get_resume(link):
 
     # Вставка данных в базу данных
     try:
-        conn = sqlite3.connect('resumes.db')
+        conn = sqlite3.connect('main.db')
         cursor = conn.cursor()
         cursor.execute('''
             INSERT INTO resumes (name, salary, tags, employment, schedule)
