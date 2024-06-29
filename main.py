@@ -2,7 +2,6 @@ import requests
 from bs4 import BeautifulSoup
 import fake_useragent
 import time
-import sqlite3
 from urllib.parse import urlencode
 
 def get_links(text, employment='full', schedule=None, salary_from=None, salary_to=None, **filters):
@@ -63,7 +62,8 @@ def get_links(text, employment='full', schedule=None, salary_from=None, salary_t
             for a in soup.find_all('a', class_='bloko-link'):
                 href = a.get('href').split('?')[0]
                 full_url = f"https://hh.ru{href}"
-                yield full_url
+                if str(full_url).split('/')[-2] == 'resume' and str(full_url).split('/')[-1] != 'advanced':
+                    yield full_url
         except Exception as e:
             print(f"Error during link fetching: {e}")
             time.sleep(1)
@@ -117,22 +117,24 @@ def get_resume(link):
         "salary": salary,
         "tags": tags,
         "employment": employment,
-        "schedule": schedule
+        "schedule": schedule,
+        "link": link
     }
 
-    # Вставка данных в базу данных
-    try:
-        conn = sqlite3.connect('main.db')
-        cursor = conn.cursor()
-        cursor.execute('''
-            INSERT INTO resumes (name, salary, tags, employment, schedule)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (resume['name'], resume['salary'], resume['tags'], resume['employment'], resume['schedule']))
-        conn.commit()
-        conn.close()
-        print(f"Added resume to database: {resume}")
-    except Exception as e:
-        print(f"Error during database insertion: {e}")
+
+    # # Вставка данных в базу данных
+    # try:
+    #     conn = sqlite3.connect('main.db')
+    #     cursor = conn.cursor()
+    #     cursor.execute('''
+    #         INSERT INTO resumes (name, salary, tags, employment, schedule)
+    #         VALUES (?, ?, ?, ?, ?)
+    #     ''', (resume['name'], resume['salary'], resume['tags'], resume['employment'], resume['schedule']))
+    #     conn.commit()
+    #     conn.close()
+    #     print(f"Added resume to database: {resume}")
+    # except Exception as e:
+    #     print(f"Error during database insertion: {e}")
 
 if __name__ == "__main__":
     filters = {
@@ -142,6 +144,7 @@ if __name__ == "__main__":
         'search_period': 0,
         'filter_exp_period': 'all_time'
     }
+    text_query = input("Enter search text: ")
     employment_type = input("Enter employment type (full, part, probation): ")
     schedule_type = input("Enter schedule type (fullDay, remote, flexible, or leave blank): ")
     salary_from = input("Enter minimum salary (or leave blank): ")
@@ -151,6 +154,6 @@ if __name__ == "__main__":
     salary_from = int(salary_from) if salary_from else None
     salary_to = int(salary_to) if salary_to else None
 
-    for link in get_links('python', employment=employment_type, schedule=schedule_type, salary_from=salary_from, salary_to=salary_to, **filters):
+    for link in get_links(text_query, employment=employment_type, schedule=schedule_type, salary_from=salary_from, salary_to=salary_to, **filters):
         get_resume(link)
         time.sleep(1)

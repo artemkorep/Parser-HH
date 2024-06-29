@@ -112,28 +112,31 @@ def get_vacancy(link):
         "exp": exp,
         "employment": employment,
         "salary": salary,
-        "view": view
+        "view": view,
+        "link": link
     }
 
-    # Вставка данных в базу данных
-    try:
-        conn = sqlite3.connect('main.db')
-        cursor = conn.cursor()
-        cursor.execute('''
-            INSERT INTO vacancies (name, exp, employment, salary, view)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (vacancy['name'], vacancy['exp'], vacancy['employment'], vacancy['salary'], vacancy['view']))
-        conn.commit()
-        conn.close()
-        print(f"Added vacancy to database: {vacancy}")
-    except Exception as e:
-        print(f"Error during database insertion: {e}")
+
+    # # Вставка данных в базу данных
+    # try:
+    #     conn = sqlite3.connect('main.db')
+    #     cursor = conn.cursor()
+    #     cursor.execute('''
+    #         INSERT INTO vacancies (name, exp, employment, salary, view)
+    #         VALUES (?, ?, ?, ?, ?)
+    #     ''', (vacancy['name'], vacancy['exp'], vacancy['employment'], vacancy['salary'], vacancy['view']))
+    #     conn.commit()
+    #     conn.close()
+    #     print(f"Added vacancy to database: {vacancy}")
+    # except Exception as e:
+    #     print(f"Error during database insertion: {e}")
 
 if __name__ == "__main__":
-    salary_from = input("Enter minimum salary (or leave blank): ")
-    salary_to = input("Enter maximum salary (or leave blank): ")
+    text_query = input("Enter search text: ")
     experience = input("Enter experience (noExperience, between1And3, between3And6, moreThan6) (or leave blank): ")
     schedule = input("Enter schedule (fullDay, remote, flexible) (or leave blank): ")
+    salary_from = input("Enter minimum salary (or leave blank): ")
+    salary_to = input("Enter maximum salary (or leave blank): ")
 
     # Преобразование пустых строк в None
     salary_from = int(salary_from) if salary_from else None
@@ -141,6 +144,6 @@ if __name__ == "__main__":
     experience = experience if experience else None
     schedule = schedule if schedule else None
 
-    for link in get_links('python', salary_from=salary_from, salary_to=salary_to, experience=experience, schedule=schedule):
+    for link in get_links(text_query, salary_from=salary_from, salary_to=salary_to, experience=experience, schedule=schedule):
         get_vacancy(link)
         time.sleep(1)
