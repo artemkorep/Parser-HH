@@ -10,6 +10,7 @@ from aiogram.contrib.fsm_storage.memory import MemoryStorage
 import aiohttp
 from bs4 import BeautifulSoup
 from urllib.parse import urlencode
+import sqlite3
 
 API_TOKEN = '7235202091:AAEkO5yb0EqieqRueQBNyhzFWIIbEzuyF_c'
 
@@ -19,6 +20,35 @@ bot = Bot(token=API_TOKEN)
 storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
 dp.middleware.setup(LoggingMiddleware())
+
+# Создаем или подключаемся к базе данных
+conn = sqlite3.connect('hh_data.db')
+cursor = conn.cursor()
+
+# Создаем таблицы для резюме и вакансий, если они не существуют
+cursor.execute('''
+CREATE TABLE IF NOT EXISTS resumes (
+    id INTEGER PRIMARY KEY,
+    name TEXT,
+    salary TEXT,
+    tags TEXT,
+    employment TEXT,
+    schedule TEXT,
+    link TEXT UNIQUE
+)
+''')
+cursor.execute('''
+CREATE TABLE IF NOT EXISTS vacancies (
+    id INTEGER PRIMARY KEY,
+    name TEXT,
+    exp TEXT,
+    employment TEXT,
+    salary TEXT,
+    view TEXT,
+    link TEXT UNIQUE
+)
+''')
+conn.commit()
 
 class Form(StatesGroup):
     mode = State()
@@ -108,14 +138,14 @@ async def get_resume(session, link):
     except:
         tags = None
     try:
-        if salary == None:
+        if salary is None:
             employment = soup.find('div', class_='resume-block-container').find_all('p')[0].text
         else:
             employment = soup.find('div', class_='resume-block-item-gap').find_all('p')[0].text.replace('Занятость:', '')
     except:
         employment = None
     try:
-        if salary == None:
+        if salary is None:
             schedule = soup.find('div', class_='resume-block-container').find_all('p')[1].text
         else:
             schedule = soup.find('div', class_='resume-block-item-gap').find_all('p')[1].text.replace('График работы:', '')
@@ -129,6 +159,11 @@ async def get_resume(session, link):
         "schedule": schedule,
         "link": link
     }
+    cursor.execute('''
+        INSERT OR IGNORE INTO resumes (name, salary, tags, employment, schedule, link)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ''', (name, salary, ', '.join(tags) if tags else None, employment, schedule, link))
+    conn.commit()
     return resume
 
 async def get_vacancy_links(session, text, salary_from=None, salary_to=None, experience=None, schedule=None):
@@ -212,6 +247,11 @@ async def get_vacancy(session, link):
         "view": view,
         "link": link
     }
+    cursor.execute('''
+        INSERT OR IGNORE INTO vacancies (name, exp, employment, salary, view, link)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ''', (name, exp, employment, salary, view, link))
+    conn.commit()
     return vacancy
 
 @dp.message_handler(commands='start')
@@ -328,46 +368,71 @@ async def process_print(callback_query: types.CallbackQuery, state: FSMContext):
 
     async with aiohttp.ClientSession() as session:
         if mode == 'resume':
-            filters = {
-                'hhtmFrom': 'resume_search_form',
-                'relocation': 'living_or_relocation',
-                'gender': 'unknown',
-                'search_period': 0,
-                'filter_exp_period': 'all_time'
-            }
-            links = await get_links(session, text_query, employment=employment_type, schedule=schedule_type, salary_from=salary_from, salary_to=salary_to, **filters)
-            start_index = (current_page - 1) * 5
-            end_index = start_index + 5
-            if not links:
-                await callback_query.message.answer("Не удалось получить результаты. Попробуйте еще раз позже.")
-                return
-            tasks = [get_resume(session, link) for link in links[start_index:end_index]]
-            resumes = await asyncio.gather(*tasks)
-            for resume in resumes:
-                if resume:
+            cursor.execute("SELECT * FROM resumes WHERE link LIKE ?", (f"%{text_query}%",))
+            results = cursor.fetchall()
+            if results:
+                start_index = (current_page - 1) * 5
+                end_index = start_index + 5
+                for resume in results[start_index:end_index]:
                     await callback_query.message.answer(
-                        f"Резюме: {resume['name']}\nЗарплата: {resume['salary']}\nТеги: {resume['tags']}\nЗанятость: {resume['employment']}\nГрафик: {resume['schedule']}\nСсылка: {resume['link']}")
+                        f"Резюме: {resume[1]}\nЗарплата: {resume[2]}\nТеги: {resume[3]}\nЗанятость: {resume[4]}\nГрафик: {resume[5]}\nСсылка: {resume[6]}")
+                markup = InlineKeyboardMarkup()
+                if end_index < len(results):
+                    markup.add(InlineKeyboardButton("Продолжить поиск", callback_data="print"))
+                markup.add(InlineKeyboardButton("Завершить", callback_data="finish"))
+                await callback_query.message.answer("Продолжить дальше, либо завершить поиск", reply_markup=markup)
+            else:
+                links = await get_links(session, text_query, employment=employment_type, schedule=schedule_type, salary_from=salary_from, salary_to=salary_to)
+                start_index = (current_page - 1) * 5
+                end_index = start_index + 5
+                if not links:
+                    await callback_query.message.answer("Не удалось получить результаты. Попробуйте еще раз позже.")
+                else:
+                    tasks = [get_resume(session, link) for link in links[start_index:end_index]]
+                    resumes = await asyncio.gather(*tasks)
+                    for resume in resumes:
+                        if resume:
+                            await callback_query.message.answer(
+                                f"Резюме: {resume['name']}\nЗарплата: {resume['salary']}\nТеги: {resume['tags']}\nЗанятость: {resume['employment']}\nГрафик: {resume['schedule']}\nСсылка: {resume['link']}")
+                    markup = InlineKeyboardMarkup()
+                    if end_index < len(links):
+                        markup.add(InlineKeyboardButton("Продолжить поиск", callback_data="print"))
+                    markup.add(InlineKeyboardButton("Завершить", callback_data="finish"))
+                    await callback_query.message.answer("Продолжить дальше, либо завершить поиск", reply_markup=markup)
+            await state.update_data(current_page=current_page + 1)
         else:
-            links = await get_vacancy_links(session, text_query, salary_from=salary_from, salary_to=salary_to, experience=employment_type, schedule=schedule_type)
-            start_index = (current_page - 1) * 5
-            end_index = start_index + 5
-            if not links:
-                await callback_query.message.answer("Не удалось получить результаты. Попробуйте еще раз позже.")
-                return
-            tasks = [get_vacancy(session, link) for link in links[start_index:end_index]]
-            vacancies = await asyncio.gather(*tasks)
-            for vacancy in vacancies:
-                if vacancy:
+            cursor.execute("SELECT * FROM vacancies WHERE link LIKE ?", (f"%{text_query}%",))
+            results = cursor.fetchall()
+            if results:
+                start_index = (current_page - 1) * 5
+                end_index = start_index + 5
+                for vacancy in results[start_index:end_index]:
                     await callback_query.message.answer(
-                        f"Вакансия: {vacancy['name']}\nОпыт: {vacancy['exp']}\nЗанятость: {vacancy['employment']}\nЗарплата: {vacancy['salary']}\nПросмотры: {vacancy['view']}\nСсылка: {vacancy['link']}")
-
-        markup = InlineKeyboardMarkup()
-        if end_index < len(links):
-            markup.add(InlineKeyboardButton("Продолжить поиск", callback_data="print"))
-        markup.add(InlineKeyboardButton("Завершить", callback_data="finish"))
-        await callback_query.message.answer("Продолжить дальше, либо завершить поиск", reply_markup=markup)
-
-    await state.update_data(current_page=current_page + 1)
+                        f"Вакансия: {vacancy[1]}\nОпыт: {vacancy[2]}\nЗанятость: {vacancy[3]}\nЗарплата: {vacancy[4]}\nПросмотры: {vacancy[5]}\nСсылка: {vacancy[6]}")
+                markup = InlineKeyboardMarkup()
+                if end_index < len(results):
+                    markup.add(InlineKeyboardButton("Продолжить поиск", callback_data="print"))
+                markup.add(InlineKeyboardButton("Завершить", callback_data="finish"))
+                await callback_query.message.answer("Продолжить дальше, либо завершить поиск", reply_markup=markup)
+            else:
+                links = await get_vacancy_links(session, text_query, salary_from=salary_from, salary_to=salary_to, experience=employment_type, schedule=schedule_type)
+                start_index = (current_page - 1) * 5
+                end_index = start_index + 5
+                if not links:
+                    await callback_query.message.answer("Не удалось получить результаты. Попробуйте еще раз позже.")
+                else:
+                    tasks = [get_vacancy(session, link) for link in links[start_index:end_index]]
+                    vacancies = await asyncio.gather(*tasks)
+                    for vacancy in vacancies:
+                        if vacancy:
+                            await callback_query.message.answer(
+                                f"Вакансия: {vacancy['name']}\nОпыт: {vacancy['exp']}\nЗанятость: {vacancy['employment']}\nЗарплата: {vacancy['salary']}\nПросмотры: {vacancy['view']}\nСсылка: {vacancy['link']}")
+                    markup = InlineKeyboardMarkup()
+                    if end_index < len(links):
+                        markup.add(InlineKeyboardButton("Продолжить поиск", callback_data="print"))
+                    markup.add(InlineKeyboardButton("Завершить", callback_data="finish"))
+                    await callback_query.message.answer("Продолжить дальше, либо завершить поиск", reply_markup=markup)
+            await state.update_data(current_page=current_page + 1)
 
 @dp.callback_query_handler(lambda c: c.data == 'finish', state="*")
 async def process_finish(callback_query: types.CallbackQuery, state: FSMContext):
