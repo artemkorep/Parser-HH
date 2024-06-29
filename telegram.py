@@ -108,11 +108,17 @@ async def get_resume(session, link):
     except:
         tags = None
     try:
-        employment = soup.find('div', class_='resume-block-container').find_all('p')[0].text
+        if salary == None:
+            employment = soup.find('div', class_='resume-block-container').find_all('p')[0].text
+        else:
+            employment = soup.find('div', class_='resume-block-item-gap').find_all('p')[0].text.replace('Занятость:', '')
     except:
         employment = None
     try:
-        schedule = soup.find('div', class_='resume-block-container').find_all('p')[1].text
+        if salary == None:
+            schedule = soup.find('div', class_='resume-block-container').find_all('p')[1].text
+        else:
+            schedule = soup.find('div', class_='resume-block-item-gap').find_all('p')[1].text.replace('График работы:', '')
     except:
         schedule = None
     resume = {
