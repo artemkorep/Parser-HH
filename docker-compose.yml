@@ -1,0 +1,10 @@
+version: '3.8'
+
+services:
+  bot:
+    build: .
+    environment:
+      - API_TOKEN=7235202091:AAEkO5yb0EqieqRueQBNyhzFWIIbEzuyF_c
+    volumes:
+      - .:/app
+    restart: always
