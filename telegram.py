@@ -11,6 +11,7 @@ import aiohttp
 from bs4 import BeautifulSoup
 from urllib.parse import urlencode
 import sqlite3
+from tenacity import retry, stop_after_attempt, wait_fixed
 
 API_TOKEN = '7235202091:AAEkO5yb0EqieqRueQBNyhzFWIIbEzuyF_c'
 
@@ -61,6 +62,7 @@ class Form(StatesGroup):
     current_page = State()
     results = State()
 
+@retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
 async def fetch(session, url):
     try:
         async with session.get(url) as response:
@@ -378,54 +380,25 @@ async def process_print(callback_query: types.CallbackQuery, state: FSMContext):
     if not results:
         async with aiohttp.ClientSession() as session:
             if mode == 'resume':
-                query = "SELECT * FROM resumes WHERE name LIKE ?"
-                params = [f"%{text_query}%"]
-                if salary_from or salary_to:
-                    query += " AND salary IS NOT NULL"
-                if salary_from:
-                    query += " AND CAST(REPLACE(REPLACE(salary, ' ', ''), '₽', '') AS INTEGER) >= ?"
-                    params.append(salary_from)
-                if salary_to:
-                    query += " AND CAST(REPLACE(REPLACE(salary, ' ', ''), '₽', '') AS INTEGER) <= ?"
-                    params.append(salary_to)
-                cursor.execute(query, params)
+                links = await get_links(session, text_query, employment=employment_type, schedule=schedule_type, salary_from=salary_from, salary_to=salary_to)
+                tasks = [get_resume(session, link) for link in links[:50]]  # Ограничиваем число запросов
             else:
-                query = "SELECT * FROM vacancies WHERE name LIKE ?"
-                params = [f"%{text_query}%"]
-                if salary_from or salary_to:
-                    query += " AND salary IS NOT NULL"
-                if salary_from:
-                    query += " AND CAST(REPLACE(REPLACE(salary, ' ', ''), '₽', '') AS INTEGER) >= ?"
-                    params.append(salary_from)
-                if salary_to:
-                    query += " AND CAST(REPLACE(REPLACE(salary, ' ', ''), '₽', '') AS INTEGER) <= ?"
-                    params.append(salary_to)
-                cursor.execute(query, params)
-            results = cursor.fetchall()
+                links = await get_vacancy_links(session, text_query, salary_from=salary_from, salary_to=salary_to, experience=employment_type, schedule=schedule_type)
+                tasks = [get_vacancy(session, link) for link in links[:50]]  # Ограничиваем число запросов
+
+            new_results = await asyncio.gather(*tasks)
+            results.extend([res for res in new_results if res])
             await state.update_data(results=results)
 
-            if len(results) == 0:
-                if mode == 'resume':
-                    links = await get_links(session, text_query, employment=employment_type, schedule=schedule_type, salary_from=salary_from, salary_to=salary_to)
-                else:
-                    links = await get_vacancy_links(session, text_query, salary_from=salary_from, salary_to=salary_to, experience=employment_type, schedule=schedule_type)
-
-                if links:
-                    tasks = [get_resume(session, link) if mode == 'resume' else get_vacancy(session, link) for link in links[:50]]  # Ограничиваем число запросов
-                    new_results = await asyncio.gather(*tasks)
-                    results.extend([res for res in new_results if res])
-                    await state.update_data(results=results)
-
     for result in results[start_index:end_index]:
-        if isinstance(result, (tuple, list)) and len(result) > 6:
-            if mode == 'resume':
-                await callback_query.message.answer(
-                    f"Резюме: {result[1]}\nЗарплата: {result[2]}\nТеги: {result[3]}\nЗанятость: {result[4]}\nГрафик: {result[5]}\nСсылка: {result[6]}"
-                )
-            else:
-                await callback_query.message.answer(
-                    f"Вакансия: {result[1]}\nОпыт: {result[2]}\nЗанятость: {result[3]}\nЗарплата: {result[4]}\nПросмотры: {result[5]}\nСсылка: {result[6]}"
-                )
+        if mode == 'resume':
+            await callback_query.message.answer(
+                f"Резюме: {result['name']}\nЗарплата: {result['salary']}\nТеги: {result['tags']}\nЗанятость: {result['employment']}\nГрафик: {result['schedule']}\nСсылка: {result['link']}"
+            )
+        else:
+            await callback_query.message.answer(
+                f"Вакансия: {result['name']}\nОпыт: {result['exp']}\nЗанятость: {result['employment']}\nЗарплата: {result['salary']}\nПросмотры: {result['view']}\nСсылка: {result['link']}"
+            )
 
     markup = InlineKeyboardMarkup()
     if len(results) > end_index:
@@ -447,7 +420,7 @@ async def process_analytics(callback_query: types.CallbackQuery, state: FSMConte
     salary_count = 0
 
     for result in results:
-        salary = result[2] if mode == 'resume' else result[4]
+        salary = result['salary']
         if salary and salary.lower() != 'не указано':
             try:
                 salary_value = int(''.join(filter(str.isdigit, salary.split()[0])))

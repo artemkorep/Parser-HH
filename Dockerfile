@@ -10,8 +10,8 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # Копируем файл requirements.txt и устанавливаем зависимости
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements.txt requirements.txt
+RUN pip install -r requirements.txt
 
 # Копируем оставшиеся файлы проекта
 COPY . .
